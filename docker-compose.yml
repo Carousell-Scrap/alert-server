@@ -1,0 +1,75 @@
+version: "3"
+services:
+  # selenium:
+  #   image: selenium/standalone-chrome:4.9.0-20230421
+  #   privileged: true
+  #   shm_size: 2g
+  #   ports:
+  #   - 4444:4444
+  selenium:
+    image: seleniarm/standalone-chromium:102.0.5005.61
+    shm_size: 2g
+    environment:
+      START_XVFB: "false"
+      SE_NODE_MAX_SESSIONS: 4
+      # JAVA_OPTS: "-Dwebdriver.chrome.whitelistedIps="
+      SE_NODE_OVERRIDE_MAX_SESSIONS: 4
+      SE_NODE_SESSION_TIMEOUT: 150
+    ports:
+      - 4444:4444
+  database:
+    build: ./docker/pocketbase
+    restart: always
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/usr/local/bin/pb_data
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - rabbit
+    volumes:
+      - .:/app
+  bot:
+    build:
+      context: .
+      dockerfile: ./docker/bot/Dockerfile
+    restart: always
+    depends_on:
+      - rabbit
+    volumes:
+      - .:/bot
+  rabbit:
+    hostname: rabbit
+    image: rabbitmq:management
+    environment:
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=rabbitmq
+    ports:
+      - "5673:5672"
+      - "15672:15672"
+  carousell_scalper_worker:
+    build:
+      context: .
+    hostname: carousell_scalper_worker
+    entrypoint: celery
+    command: -A workers.carousell_scalper_worker worker --loglevel=info --concurrency=4
+    volumes:
+      - .:/app
+    links:
+      - rabbit
+    depends_on:
+      - rabbit
+  cron:
+    build:
+      context: .
+    hostname: scapper_cron
+    entrypoint: celery
+    command: -A workers.carousell_scalper_worker beat --loglevel=info
+    volumes:
+      - .:/app

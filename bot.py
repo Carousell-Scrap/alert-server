@@ -27,8 +27,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# client = PocketBase('http://127.0.0.1:8090')
 client = PocketBase(os.getenv('POCKETBASE_URL'))
+print(client)
 
 
 def create_alert(query, from_price, to_price, created_by):
@@ -56,6 +56,8 @@ def create_alert(query, from_price, to_price, created_by):
 
 
 def get_chat_id_by_user_id(user_id):
+    print('get_chat_id_by_user_id')
+    print(client.collection('chats').get_full_list())
     chats = client.collection('chats').get_list(
         1, 1, query_params={"filter": f'user_id = "{str(user_id)}"'})
 
@@ -203,7 +205,8 @@ async def use_code_process(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return ConversationHandler.END
 
 
-async def subscribe_to_alert(update: Update) -> None:
+async def subscribe_to_alert(update: Update, context: ContextTypes.DEFAULT_TYPE) \
+        -> None:
     print('subscribe_to_alert')
     user_id = update.effective_user.id
 
@@ -399,7 +402,7 @@ Alert {chat_num}.\n<b>Search Query:</b> {alert.query}\n'''
         print(e)
 
 
-async def check_alerts_left(update: Update) -> None:
+async def check_alerts_left(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print('check_alerts_left')
     user_id = update.effective_user.id
     message = ''

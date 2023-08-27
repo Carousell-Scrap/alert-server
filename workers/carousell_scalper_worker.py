@@ -16,7 +16,8 @@ from selenium import webdriver
 from pocketbase import PocketBase, utils as pbutils
 
 import utils
-from constants import USER_AGENT, BASE_URL
+from constants import USER_AGENTS, BASE_URL
+import random
 
 
 def init_celery():
@@ -24,15 +25,16 @@ def init_celery():
     Returns:
         celery: Celery instance.
     """
+    print('init')
     # Initialize Celery.
     celery_init = Celery('workers.carousell_scalper_worker',
                          broker=os.getenv('CELERY_BROKER_URL'),
                          backend=os.getenv('CELERY_RESULT_BACKEND'))
 
     celery_init.conf.beat_schedule = {
-        "run_every_10": {
+        "scrape_ready_alerts": {
             "task": "workers.carousell_scalper_worker.scrape_ready_alerts",
-            "schedule": 20.0
+            "schedule": 90.0
         }
     }
 
@@ -71,15 +73,16 @@ def scrape_carousell_with_params(query, alert_id, chat_id, from_range=None,
         print(url)
 
         print('setting up driver...')
-        driver = set_up_driver_option(USER_AGENT)
+        driver = set_up_driver_option(random.choice(USER_AGENTS))
         driver.get(url)
 
+        # ! Remove this as we only need the most recent.
         # Click on load more button until there is no more.
         if is_first_time:
             print('Is first time loading longer...')
             continuous_press_load_more_button(driver, 5)
-        else:
-            continuous_press_load_more_button(driver)
+        # else:
+        #     continuous_press_load_more_button(driver)
 
         print('scrapping...')
         soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -90,9 +93,7 @@ def scrape_carousell_with_params(query, alert_id, chat_id, from_range=None,
         print('sending messages...')
         if is_first_time:
             messages = [
-                f"Alert ran for the first time and found {items_created} \
-                    new listings! Subsequent alerts will only send you\
-                        detailed new listings.\n"]
+                f"Alert ran for the first time and found {items_created} new listings! Subsequent alerts will only send you new listings.\n"]  # noqa: E501
             asyncio.run(send_messages(chat_id, messages,
                         query, from_range, to_range))
         else:
@@ -116,6 +117,7 @@ def scrape_carousell_with_params(query, alert_id, chat_id, from_range=None,
         print(f'Seem to be an error... {error}')
     finally:
         print('quitting driver...')
+        driver.delete_all_cookies()
         driver.quit()
         client.collection('alerts').update(alert_id, {
             'status': 'ready_to_search',
@@ -129,13 +131,13 @@ def scrape_ready_alerts():
     """
     try:
         print('scrape_ready_alerts')
+
         alerts_to_scrape = client.collection("alerts").get_full_list(
             query_params={"filter": f'''status = "ready_to_search" &&
                                         next_time_to_run < "{datetime.today()}" &&
                                         expire_at > "{datetime.today()}" '''})
 
         for alert in alerts_to_scrape:
-            print(alert.id)
             user_id = client.collection('chats')\
                 .get_list(1, 1,
                           query_params={"filter": f'id = "{alert.created_by}"'})\
@@ -164,44 +166,44 @@ def scrape_page(soup: BeautifulSoup, alert_id: str):
         _type_: items found.
     """
 
-    # Need to change when the classname changes.
-    overalls = soup.select('div.D_xT')
-    images = soup.select('img.D_Gl.D_XK')
-    names = soup.select('p.D_sA.D_qZ.D_sB.D_sG.D_sJ.D_sM.D_sO.D_sK.D_sy')
-    prices = soup.select('p.D_sA.D_qZ.D_sB.D_sG.D_sI.D_sM.D_sP.D_sx')
-    sellers = soup.select('p.D_sA.D_qZ.D_sB.D_sG.D_sI.D_sM.D_sP.D_sy')
+    # Need to change when the classname changes.soup
+
+    item_listings = soup.find_all(
+        'div', {"data-testid": re.compile("listing-card-")})
 
     items_found = []
-    if len(overalls) == len(names) == len(prices) == len(sellers):
-        min_range = min(len(overalls), len(images), len(
-            names), len(prices), len(sellers))
-        for i in range(min_range):
-            urlify_name = names[i].text
-            urlify_name = re.sub(r"[^\w\s]", '', urlify_name)
-            urlify_name = re.sub(r"\s+", '-', urlify_name)
-            if urlify_name[0] == '-':
-                urlify_name = urlify_name[1:]
-            if urlify_name[-1] == '-':
-                urlify_name = urlify_name[:-1]
+    for item_listing in item_listings:
+        # seller
+        seller = item_listing.find(
+            'p', {"data-testid": 'listing-card-text-seller-name'}).getText()
+        # price
+        price = item_listing.find('p', {"title": re.compile("S")}).getText()
+        # name
+        name = item_listing.find(
+            'p', {"style": re.compile("--max-line")}).getText()
 
-            item_id = overalls[i]['data-testid'].split('-')[2]
-            item_url = f'{BASE_URL}/p/{urlify_name}-{item_id}'
+        item_id = item_listing['data-testid'].split('-')[2]
+        urlify_name = name
+        urlify_name = re.sub(r"[^\w\s]", '', urlify_name)
+        urlify_name = re.sub(r"\s+", '-', urlify_name)
+        if urlify_name[0] == '-':
+            urlify_name = urlify_name[1:]
+        if urlify_name[-1] == '-':
+            urlify_name = urlify_name[:-1]
+        item_url = f'{BASE_URL}/p/{urlify_name}-{item_id}'
+        clean_price = price.replace('$', '').replace(',', '')
+        clean_price = re.sub(r'[a-zA-Z]', r'', clean_price).strip()
 
-            clean_price = prices[i].text.replace('$', '').replace(',', '')
-            clean_price = re.sub(r'[a-zA-Z]', r'', clean_price).strip()
-
-            if clean_price == '':
-                clean_price = 0
-            items_found.append({
-                'listing_id': item_id,
-                'detail_url': item_url,
-                'image_url': images[i]['src'],
-                'name': names[i].text,
-                'price': float(clean_price),
-                'seller': sellers[i].text,
-                'date_found': date.today().isoformat(),
-                'alert_id': alert_id
-            })
+        items_found.append({
+            'listing_id': item_id,
+            'detail_url': item_url,
+            'image_url': item_listing.find_all('img')[0].get('src'),
+            'name': name,
+            'price': float(clean_price),
+            'seller': seller,
+            'date_found': date.today().isoformat(),
+            'alert_id': alert_id
+        })
 
     return items_found
 
@@ -225,7 +227,7 @@ def set_up_scape_url(query: str, from_range: float, to_range: float):
         filters.append(f"price_end={to_range}")
 
     url = f'{BASE_URL}/search/{quote(query)}/?'
-    url += f'addRecent=false&includeSuggestions=false{"&" if len(filters) > 0 else ""}'
+    url += f'addRecent=false&sort_by=3&tab=marketplace&includeSuggestions=false{"&" if len(filters) > 0 else ""}'
     url += f'{ ("&".join(filters)) if len(filters) > 0 else ""}'
     return url
 
@@ -248,11 +250,11 @@ async def send_messages(chat_id: str, messages: list, query: str, from_range: st
         for message in messages:
             message += "----- ----- -----\n"
             message += f'Query: {query}\n\
-                Minimum Price: {"-" if from_range== 0 else ("$" + str(from_range))}\n\
-                Maximum Price: {"-" if to_range== 0 else ("$" + str(to_range))}\n'
+        Minimum Price: {"-" if from_range== 0 else ("$" + str(from_range))}\n\
+        Maximum Price: {"-" if to_range== 0 else ("$" + str(to_range))}\n'
             message += "----- ----- -----\n"
             message += 'We are constantly improving! \
-                Contact speedyalert@gmail.com for feedback and enquires! 💯💯\n\n'
+        Contact speedyalert@gmail.com for feedback and enquires! 💯💯\n\n'
             await bot.send_message(chat_id, message,
                                    parse_mode='html', disable_web_page_preview=True)
 
@@ -303,12 +305,13 @@ def set_up_driver_option(user_agent: str):
     Returns:
         WebDriver: Driver to be used to scrape.
     """
+
     options = webdriver.ChromeOptions()
     options.add_argument('--no-sandbox')
-    options.add_argument('--headless')
     options.add_argument("--enable-javascript")
+    options.add_argument('--headless')
     options.add_argument(f'user-agent={user_agent}')
-    options.add_argument("--remote-debugging-port=9222")
+    # options.add_argument("--remote-debugging-port=9222")
     driver = webdriver.Remote(os.getenv('SELENIUM_URL'), options=options)
 
     return driver
@@ -340,7 +343,7 @@ def continuous_press_load_more_button(driver: webdriver, sleep_time=2.5):
 
             more_button = driver.find_element(
                 "xpath", "//button[contains(text(), 'Show more results')]")
-        except: # noqa: E722
+        except:  # noqa: E722
             more_button = None
 
     print('loading done...')

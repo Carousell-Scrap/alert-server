@@ -1,8 +1,9 @@
-from datetime import datetime, date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 
-def get_alert_next_time_to_run(minutes=1):
+def get_alert_next_time_to_run(minutes=3):
+    # return datetime.today() + relativedelta(seconds=20)
     return datetime.today() + relativedelta(minutes=minutes)
 
 

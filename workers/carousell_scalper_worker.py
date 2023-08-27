@@ -250,11 +250,11 @@ async def send_messages(chat_id: str, messages: list, query: str, from_range: st
         for message in messages:
             message += "----- ----- -----\n"
             message += f'Query: {query}\n\
-        Minimum Price: {"-" if from_range== 0 else ("$" + str(from_range))}\n\
-        Maximum Price: {"-" if to_range== 0 else ("$" + str(to_range))}\n'
+Minimum Price: {"-" if from_range== 0 else ("$" + str(from_range))}\n\
+Maximum Price: {"-" if to_range== 0 else ("$" + str(to_range))}\n'
             message += "----- ----- -----\n"
-            message += 'We are constantly improving! \
-        Contact speedyalert@gmail.com for feedback and enquires! 💯💯\n\n'
+            message += 'We are constantly improving! \n \
+Contact speedyalert@gmail.com for feedback and enquires! 💯💯\n\n'
             await bot.send_message(chat_id, message,
                                    parse_mode='html', disable_web_page_preview=True)
 

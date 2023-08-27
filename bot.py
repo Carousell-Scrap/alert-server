@@ -328,11 +328,11 @@ async def subscribe_to_alert_confirmation(update: Update, context: ContextTypes.
             await update.message.reply_html(
                 '''You have successfully subscribed to your alert! 🎉🎉
 
-    Please take note that the alert will only be sent to you when there is a new listing that matches your search query and price range.
+Please take note that the alert will only be sent to you when there is a new listing that matches your search query and price range.
 
-    You will be receiving alerts soon!
+You will be receiving alerts soon!
 
-    You can view your alerts by typing /my_alerts.
+You can view your alerts by typing /my_alerts.
                 ''')
         else:
             await update.message.reply_text('There was an error creating your alert.\

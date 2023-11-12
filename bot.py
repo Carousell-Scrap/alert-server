@@ -443,8 +443,6 @@ Thank you for your interest in using this bot, we are currently in beta and are 
 if __name__ == "__main__":
     print('initiating bot')
 
-    # botApp = Application.builder().token(
-    #     "6104332010:AAF3Se2eVd_7u2lIBqjCNgjOJRGw0p_x1n8").build()
     client = PocketBase(os.getenv('POCKETBASE_URL'))
     botApp = Application.builder().token(os.getenv('TELEGRAM_TOKEN')).build()
 

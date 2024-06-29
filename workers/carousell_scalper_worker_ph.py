@@ -16,7 +16,7 @@ from selenium import webdriver
 from pocketbase import PocketBase, utils as pbutils
 
 import utils
-from constants import USER_AGENTS, BASE_URL
+from constants import USER_AGENTS, BASE_URL_PH
 import random
 
 
@@ -67,6 +67,7 @@ def scrape_carousell_with_params(
     """
     try:
         print(f"set status to ongoing... [{alert_id}]")
+        print(client)
         client.collection("alerts").update(
             alert_id,
             {
@@ -145,6 +146,10 @@ def scrape_ready_alerts():
     """
     try:
         print("scrape_ready_alerts")
+        print("hii")
+        print(client)
+        print("datetime.today()", datetime.today())
+        print("hiii")
 
         alerts_to_scrape = client.collection("alerts").get_full_list(
             query_params={
@@ -153,7 +158,8 @@ def scrape_ready_alerts():
                                         expire_at > "{datetime.today()}" """
             }
         )
-        
+
+        print("hi")
         print(alerts_to_scrape)
 
         for alert in alerts_to_scrape:
@@ -165,8 +171,8 @@ def scrape_ready_alerts():
             )
             if user_id is None:
                 continue
-            
-            print('hiii')
+
+            print("hiii")
 
             scrape_carousell_with_params(
                 alert.query,
@@ -197,7 +203,7 @@ def scrape_page(soup: BeautifulSoup, alert_id: str):
     # Need to change when the classname changes.soup
 
     item_listings = soup.find_all("div", {"data-testid": re.compile("listing-card-")})
-
+    print(len(item_listings))
     items_found = []
     for item_listing in item_listings:
         # seller
@@ -205,7 +211,7 @@ def scrape_page(soup: BeautifulSoup, alert_id: str):
             "p", {"data-testid": "listing-card-text-seller-name"}
         ).getText()
         # price
-        price = item_listing.find("p", {"title": re.compile("S")}).getText()
+        price = item_listing.find("p", {"title": re.compile("PHP")}).getText()
         # name
         name = item_listing.find("p", {"style": re.compile("--max-line")}).getText()
 
@@ -217,7 +223,7 @@ def scrape_page(soup: BeautifulSoup, alert_id: str):
             urlify_name = urlify_name[1:]
         if urlify_name[-1] == "-":
             urlify_name = urlify_name[:-1]
-        item_url = f"{BASE_URL}/p/{urlify_name}-{item_id}"
+        item_url = f"{BASE_URL_PH}/p/{urlify_name}-{item_id}"
         clean_price = price.replace("$", "").replace(",", "")
         clean_price = re.sub(r"[a-zA-Z]", r"", clean_price).strip()
 
@@ -255,10 +261,11 @@ def set_up_scape_url(query: str, from_range: float, to_range: float):
     if to_range is not None and to_range != 0:
         filters.append(f"price_end={to_range}")
 
-    url = f"{BASE_URL}/search/{quote(query)}/?"
+    url = f"{BASE_URL_PH}/?search={quote(query)}&"
     url += f'addRecent=false&sort_by=3&tab=marketplace&includeSuggestions=\
-        false{"&" if len(filters) > 0 else ""}'
+false{"&" if len(filters) > 0 else ""}'
     url += f'{ ("&".join(filters)) if len(filters) > 0 else ""}'
+    print(url)
     return url
 
 

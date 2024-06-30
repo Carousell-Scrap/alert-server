@@ -524,9 +524,10 @@ few. If you are interested, please fill in this form and we will get back to you
 
 
 if __name__ == "__main__":
-    print("initiating bot")
-    client = PocketBase(os.getenv("POCKETBASE_URL"))
-    botApp = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
+    print('initiating bot')
+
+    client = PocketBase(os.getenv('POCKETBASE_URL'))
+    botApp = Application.builder().token(os.getenv('TELEGRAM_TOKEN')).build()
 
     use_code_handler = ConversationHandler(
         entry_points=[CommandHandler("use_code", use_code)],

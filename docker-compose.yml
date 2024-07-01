@@ -11,9 +11,8 @@ services:
     shm_size: 2g
     environment:
       START_XVFB: "false"
-      SE_NODE_MAX_SESSIONS: 4
-      # JAVA_OPTS: "-Dwebdriver.chrome.whitelistedIps="
-      SE_NODE_OVERRIDE_MAX_SESSIONS: true
+      SE_NODE_MAX_SESSION: 5
+      SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
       SE_NODE_SESSION_TIMEOUT: 150
     ports:
       - 4444:4444

@@ -44,18 +44,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-client = PocketBase(os.getenv("POCKETBASE_URL"))
-print(client)
+
+def get_client():
+    return PocketBase(os.getenv("POCKETBASE_URL"))
 
 
 def create_alert(created_by, query=None, from_price=None, to_price=None, url=None):
     print("create_alert")
     expiryDate = utils.get_alert_expiry()
     nextTimeToRun = utils.get_alert_next_time_to_run(seconds=60)
-    apiKey = utils.generate_random_string() + "_" + expiryDate.strftime("%d/%m/%Y_%H:%M:%S")
+    apiKey = (
+        utils.generate_random_string() + "_" + expiryDate.strftime("%d/%m/%Y_%H:%M:%S")
+    )
     cleanedApiKey = re.sub(r"[^\w\s]", "", apiKey)
     cleanedApiKey = re.sub(r"\s+", "-", cleanedApiKey)
-    client.collection("alerts").create(
+    get_client().collection("alerts").create(
         {
             "url": url,
             "query": query,
@@ -75,13 +78,15 @@ def create_alert(created_by, query=None, from_price=None, to_price=None, url=Non
 
 def get_chat_id_by_user_id(user_id):
     print("get_chat_id_by_user_id")
-    print(client.collection("chats").get_full_list())
-    chats = client.collection("chats").get_list(
-        1, 1, query_params={"filter": f'user_id = "{str(user_id)}"'}
+    print(get_client().collection("chats").get_full_list())
+    chats = (
+        get_client()
+        .collection("chats")
+        .get_list(1, 1, query_params={"filter": f'user_id = "{str(user_id)}"'})
     )
 
     if chats.items is None or len(chats.items) == 0:
-        return client.collection("chats").create({"user_id": str(user_id)}).id
+        return get_client().collection("chats").create({"user_id": str(user_id)}).id
 
     return chats.items[0].id
 
@@ -89,16 +94,20 @@ def get_chat_id_by_user_id(user_id):
 async def get_user_alert_amt_available(user_id: str):
     chat_id = get_chat_id_by_user_id(user_id)
 
-    codes = client.collection("codes").get_full_list(
-        query_params={"filter": f'subscribed_by = "{chat_id}"'}
+    codes = (
+        get_client()
+        .collection("codes")
+        .get_full_list(query_params={"filter": f'subscribed_by = "{chat_id}"'})
     )
 
     total_alerts = 0
     for code in codes:
         total_alerts += code.alert_amt_to_give
 
-    alerts = client.collection("alerts").get_full_list(
-        query_params={"filter": f'created_by = "{chat_id}"'}
+    alerts = (
+        get_client()
+        .collection("alerts")
+        .get_full_list(query_params={"filter": f'created_by = "{chat_id}"'})
     )
 
     return total_alerts - len(alerts)
@@ -121,7 +130,7 @@ Please send the following command:
 /request_for_code - Request for more code
 
 <b>Alerts ⚠️</b>
-/subscribe_alert - Subscribe to a search query to be alerted
+/subscribe_alert - Subscribe to a search query to be alerted (Use URL if overseas or lots of filters)
 /my_alerts - See the status of your alerts
 /check_alerts_left - Check how many alerts you are left with
 
@@ -129,7 +138,7 @@ Please send the following command:
 ------------------------
 Take note that each subscription alert will last for 1 month! You will need to renew after to get more results.
 
-If you have any questions or feedback, please fill in this form to reach us! ⚡⚡
+If you have any questions or feedback, please email me@buildersjam.com! ⚡⚡
     """,
         reply_markup=ForceReply(selective=True),
     )
@@ -148,7 +157,7 @@ Please send the following command:
 /request_for_code - Request for more code
 
 <b>Alerts ⚠️</b>
-/subscribe_alert - Subscribe to a search query to be alerted
+/subscribe_alert - Subscribe to a search query to be alerted (Use URL if overseas or lots of filters)
 /my_alerts - See the status of your alerts
 /check_alerts_left - Check how many alerts you are left with
 
@@ -156,7 +165,7 @@ Please send the following command:
 ------------------------
 Take note that each subscription alert will last for 1 month! You will need to renew after to get more results.
 
-If you have any questions or feedback, please fill in this form to reach us! ⚡⚡
+If you have any questions or feedback, please email me@buildersjam.com! ⚡⚡
     """,
         reply_markup=ForceReply(selective=True),
     )
@@ -187,8 +196,10 @@ async def use_code_process(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         if user_id is None:
             raise Exception("Something went wrong with your chat.")
 
-        codes = client.collection("codes").get_list(
-            1, 1, query_params={"filter": f'code = "{code}"'}
+        codes = (
+            get_client()
+            .collection("codes")
+            .get_list(1, 1, query_params={"filter": f'code = "{code}"'})
         )
 
         # Check if code exist in db.
@@ -202,7 +213,9 @@ async def use_code_process(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         chat_id = get_chat_id_by_user_id(user_id)
 
         # Update code to be used.
-        client.collection("codes").update(codes.items[0].id, {"subscribed_by": chat_id})
+        get_client().collection("codes").update(
+            codes.items[0].id, {"subscribed_by": chat_id}
+        )
 
         message = codes.items[0].alert_amt_to_give
     except pbutils.ClientResponseError as e:
@@ -220,7 +233,7 @@ async def use_code_process(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
     else:
         await update.message.reply_html(
-            f"Code is valid! You have successfully redeemed <b> {message} </b> new alerts your code! 🎉🎉",
+            f"Code is valid! You have successfully redeemed <b>{message}</b> new alerts your code! 🎉🎉",
             reply_markup=ReplyKeyboardRemove(),
         )
 
@@ -434,21 +447,27 @@ async def see_my_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         user_id = update.effective_user.id
         chat_id = get_chat_id_by_user_id(user_id)
 
-        alerts = client.collection("alerts").get_full_list(
-            query_params={"filter": f'created_by = "{str(chat_id)}"'}
+        alerts = (
+            get_client()
+            .collection("alerts")
+            .get_full_list(query_params={"filter": f'created_by = "{str(chat_id)}"'})
         )
 
         message = ""
         chat_num = 1
 
         for alert in alerts:
-            listings = client.collection("listings").get_full_list(
-                query_params={"filter": f'alert_id = "{alert.id}"'}
+            listings = (
+                get_client()
+                .collection("listings")
+                .get_full_list(query_params={"filter": f'alert_id = "{alert.id}"'})
             )
             if alert.url is not None:
                 message += f"""Alert {chat_num}.\n<b>Search URL:</b> {alert.url}\n"""
             else:
-                message += f"""Alert {chat_num}.\n<b>Search Query:</b> {alert.query}\n"""
+                message += (
+                    f"""Alert {chat_num}.\n<b>Search Query:</b> {alert.query}\n"""
+                )
                 if alert.from_price != 0:
                     message += f"""<b>Minimum Price:</b> ${alert.from_price}\n"""
                 if alert.to_price != 0:
@@ -524,10 +543,10 @@ few. If you are interested, please fill in this form and we will get back to you
 
 
 if __name__ == "__main__":
-    print('initiating bot')
+    print("initiating bot")
 
-    client = PocketBase(os.getenv('POCKETBASE_URL'))
-    botApp = Application.builder().token(os.getenv('TELEGRAM_TOKEN')).build()
+    client = PocketBase(os.getenv("POCKETBASE_URL"))
+    botApp = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
 
     use_code_handler = ConversationHandler(
         entry_points=[CommandHandler("use_code", use_code)],

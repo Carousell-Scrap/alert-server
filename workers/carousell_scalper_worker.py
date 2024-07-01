@@ -46,9 +46,11 @@ def init_celery():
 
 load_dotenv()
 
-client = PocketBase(os.getenv("POCKETBASE_URL"))
-
 celery = init_celery()
+
+
+def get_client():
+    return PocketBase(os.getenv("POCKETBASE_URL"))
 
 
 @celery.task()
@@ -72,9 +74,13 @@ def scrape_carousell_with_params(
         is_first_time (bool, optional): Is this the first time the alert runs.
         Defaults to False.
     """
+    print("data")
+    print(initial_url)
+    print(query, from_range, to_range)
+
     try:
         print(f"set status to ongoing... [{alert_id}]")
-        client.collection("alerts").update(
+        get_client().collection("alerts").update(
             alert_id,
             {
                 "status": "ongoing",
@@ -82,8 +88,7 @@ def scrape_carousell_with_params(
         )
 
         print("setting up url...")
-        print("initial is ", initial_url)
-        if initial_url is None:
+        if initial_url is None or initial_url == "":
             url = set_up_scape_url(query, from_range, to_range)
         else:
             url = initial_url
@@ -140,7 +145,7 @@ def scrape_carousell_with_params(
 
         print("updating alert...")
         next_time_to_run = utils.get_alert_next_time_to_run()
-        client.collection("alerts").update(
+        get_client().collection("alerts").update(
             alert_id,
             {
                 "status": "ready_to_search",
@@ -159,7 +164,7 @@ def scrape_carousell_with_params(
         print("quitting driver...")
         driver.delete_all_cookies()
         driver.quit()
-        client.collection("alerts").update(
+        get_client().collection("alerts").update(
             alert_id,
             {
                 "status": "ready_to_search",
@@ -175,7 +180,7 @@ def scrape_ready_alerts():
     try:
         print("scrape_ready_alerts")
 
-        alerts_to_scrape = client.collection("alerts").get_full_list(
+        alerts_to_scrape = get_client().collection("alerts").get_full_list(
             query_params={
                 "filter": f"""status = "ready_to_search" &&
                                         next_time_to_run < "{datetime.today()}" &&
@@ -185,7 +190,7 @@ def scrape_ready_alerts():
 
         for alert in alerts_to_scrape:
             user_id = (
-                client.collection("chats")
+                get_client().collection("chats")
                 .get_list(1, 1, query_params={"filter": f'id = "{alert.created_by}"'})
                 .items[0]
                 .user_id
@@ -229,6 +234,7 @@ def scrape_page(
     Returns:
         _type_: items found.
     """
+    print("scrape_page")
 
     # Need to change when the classname changes.soup
     item_listings = soup.find_all("div", {"data-testid": re.compile("listing-card-")})
@@ -366,7 +372,7 @@ def create_listing_to_db(
     message_index = 0
     print(f"looking through {str(len(items))} items...")
     for item in items:
-        listing = client.collection("listings").get_list(
+        listing = get_client().collection("listings").get_list(
             1,
             1,
             query_params={
@@ -386,7 +392,7 @@ def create_listing_to_db(
 {item["price"]}\
                 </b>\nSeller:{item["seller"]}\nVisit Here: {item["detail_url"]}\n\n\n'
 
-            client.collection("listings").create(item)
+            get_client().collection("listings").create(item)
 
     return num_of_items_created, messages
 
@@ -402,9 +408,12 @@ def set_up_driver_option(user_agent: str):
     """
 
     options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
     options.add_argument("--no-sandbox")
     options.add_argument("--enable-javascript")
-    options.add_argument("--headless")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--remote-debugging-port=9222")
     options.add_argument(f"user-agent={user_agent}")
     # options.add_argument("--remote-debugging-port=9222")
     driver = webdriver.Remote(os.getenv("SELENIUM_URL"), options=options)

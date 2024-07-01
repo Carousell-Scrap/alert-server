@@ -1,4 +1,4 @@
-BASE_URL = "https://sg.carousell.com"
+BASE_URL = "https://www.carousell.sg"
 # CHROME_DRIVER_LOCATION = 'http://selenium:4444/wd/hub'
 # CHROME_DRIVER_LOCATION = '/Users/geraldheng/Documents/development/others/chromedriver_mac_arm64/chromedriver'
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Safari/\

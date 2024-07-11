@@ -89,9 +89,11 @@ def scrape_carousell_with_params(
 
         print("setting up url...")
         if initial_url is None or initial_url == "":
-            url = set_up_scape_url(query, from_range, to_range)
+            url = set_up_scape_url(
+                query=query, from_range=from_range, to_range=to_range
+            )
         else:
-            url = initial_url
+            url = set_up_initial_url_better(initial_url)
         print(url)
 
         print("setting up driver...")
@@ -180,17 +182,22 @@ def scrape_ready_alerts():
     try:
         print("scrape_ready_alerts")
 
-        alerts_to_scrape = get_client().collection("alerts").get_full_list(
-            query_params={
-                "filter": f"""status = "ready_to_search" &&
+        alerts_to_scrape = (
+            get_client()
+            .collection("alerts")
+            .get_full_list(
+                query_params={
+                    "filter": f"""status = "ready_to_search" &&
                                         next_time_to_run < "{datetime.today()}" &&
                                         expire_at > "{datetime.today()}" """
-            }
+                }
+            )
         )
 
         for alert in alerts_to_scrape:
             user_id = (
-                get_client().collection("chats")
+                get_client()
+                .collection("chats")
                 .get_list(1, 1, query_params={"filter": f'id = "{alert.created_by}"'})
                 .items[0]
                 .user_id
@@ -199,8 +206,7 @@ def scrape_ready_alerts():
                 continue
 
             print("scrape_carousell_with_params.delay")
-            print(alert.url)
-            if alert.url is not None:
+            if alert.url is not None and alert.url != "":
                 scrape_carousell_with_params.delay(
                     alert.id,
                     user_id,
@@ -241,49 +247,54 @@ def scrape_page(
 
     items_found = []
     for item_listing in item_listings:
-        # seller
-        seller = item_listing.find(
-            "p", {"data-testid": "listing-card-text-seller-name"}
-        ).getText()
+        # if any error with any item, skip to the next item.
+        try:
+            # seller
+            seller = item_listing.find(
+                "p", {"data-testid": "listing-card-text-seller-name"}
+            ).getText()
 
-        # price
-        price_result = item_listing.find(
-            "p",
-            {
-                "title": re.compile(
-                    CURRENCY_MAP[hostname.split(".")[len(hostname.split(".")) - 1]]
-                )
-            },
-        )
-        price = price_result.getText() if price_result else "0"
+            # price
+            price_result = item_listing.find(
+                "p",
+                {
+                    "title": re.compile(
+                        CURRENCY_MAP[hostname.split(".")[len(hostname.split(".")) - 1]]
+                    )
+                },
+            )
+            price = price_result.getText() if price_result else "0"
 
-        # name
-        name = item_listing.find("p", {"style": re.compile("--max-line")}).getText()
+            # name
+            name = item_listing.find("p", {"style": re.compile("--max-line")}).getText()
 
-        item_id = item_listing["data-testid"].split("-")[2]
-        urlify_name = name
-        urlify_name = re.sub(r"[^\w\s]", "", urlify_name)
-        urlify_name = re.sub(r"\s+", "-", urlify_name)
-        if urlify_name[0] == "-":
-            urlify_name = urlify_name[1:]
-        if urlify_name[-1] == "-":
-            urlify_name = urlify_name[:-1]
-        item_url = f"{hostname}/p/{urlify_name}-{item_id}"
-        clean_price = price.replace("$", "").replace(",", "")
-        clean_price = re.sub(r"[a-zA-Z]", r"", clean_price).strip()
+            item_id = item_listing["data-testid"].split("-")[2]
+            urlify_name = name
+            urlify_name = re.sub(r"[^\w\s]", "", urlify_name)
+            urlify_name = re.sub(r"\s+", "-", urlify_name)
+            if urlify_name[0] == "-":
+                urlify_name = urlify_name[1:]
+            if urlify_name[-1] == "-":
+                urlify_name = urlify_name[:-1]
+            item_url = f"{hostname}/p/{urlify_name}-{item_id}"
+            clean_price = price.replace("$", "").replace(",", "")
+            clean_price = re.sub(r"[a-zA-Z]", r"", clean_price).strip()
 
-        items_found.append(
-            {
-                "listing_id": item_id,
-                "detail_url": item_url,
-                "image_url": item_listing.find_all("img")[0].get("src"),
-                "name": name,
-                "price": float(clean_price),
-                "seller": seller,
-                "date_found": date.today().isoformat(),
-                "alert_id": alert_id,
-            }
-        )
+            items_found.append(
+                {
+                    "listing_id": item_id,
+                    "detail_url": item_url,
+                    "image_url": item_listing.find_all("img")[0].get("src"),
+                    "name": name,
+                    "price": float(clean_price),
+                    "seller": seller,
+                    "date_found": date.today().isoformat(),
+                    "alert_id": alert_id,
+                }
+            )
+        except Exception as error:
+            print(f"Error with item: {error}")
+            continue
 
     return items_found
 
@@ -309,6 +320,34 @@ def set_up_scape_url(query: str, from_range: float, to_range: float):
     url = f"{BASE_URL}/search/{quote(query)}/?"
     url += f'addRecent=false&sort_by=3&tab=marketplace&includeSuggestions=false{"&" if len(filters) > 0 else ""}'
     url += f'{ ("&".join(filters)) if len(filters) > 0 else ""}'
+    return url
+
+
+def set_up_initial_url_better(initial_url: str):
+    """Set up scrape url for selenium to load.
+
+    Args:
+        initial_url (str): Initial url to be made better.
+
+    Returns:
+        _type_: Url to be used to scrape.
+    """
+    # if there is space in the url, replace with %20.
+    url = initial_url.replace(" ", "%20")
+
+    filters = []
+    if "sort_by" not in initial_url:
+        filters.append("sort_by=3")
+    if "tab" not in initial_url:
+        filters.append("tab=marketplace")
+
+    if "?" in initial_url:
+        if len(filters) > 0:
+            url += "&" + "&".join(filters)
+    else:
+        if len(filters) > 0:
+            url += "?" + "&".join(filters)
+
     return url
 
 
@@ -372,12 +411,16 @@ def create_listing_to_db(
     message_index = 0
     print(f"looking through {str(len(items))} items...")
     for item in items:
-        listing = get_client().collection("listings").get_list(
-            1,
-            1,
-            query_params={
-                "filter": f'listing_id = "{item["listing_id"]}" && alert_id ="{alert_id}"'
-            },
+        listing = (
+            get_client()
+            .collection("listings")
+            .get_list(
+                1,
+                1,
+                query_params={
+                    "filter": f'listing_id = "{item["listing_id"]}" && alert_id ="{alert_id}"'
+                },
+            )
         )
         if listing.items is None or len(listing.items) == 0:
             num_of_items_created += 1

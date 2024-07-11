@@ -4,7 +4,8 @@ import string
 import random
 
 
-def get_alert_next_time_to_run(seconds=300):
+def get_alert_next_time_to_run(min_seconds=150, max_seconds=600):
+    seconds = random.randint(min_seconds, max_seconds)
     return datetime.today() + relativedelta(seconds=seconds)
 
 

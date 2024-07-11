@@ -13,8 +13,6 @@ from telegram import (
     ReplyKeyboardRemove,
     ForceReply,
     Update,
-    # InlineKeyboardButton,
-    # InlineKeyboardMarkup,
 )
 from telegram.ext import (
     Application,
@@ -22,7 +20,6 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
-    # CallbackQueryHandler,
     filters,
 )
 
@@ -52,7 +49,7 @@ def get_client():
 def create_alert(created_by, query=None, from_price=None, to_price=None, url=None):
     print("create_alert")
     expiryDate = utils.get_alert_expiry()
-    nextTimeToRun = utils.get_alert_next_time_to_run(seconds=60)
+    nextTimeToRun = utils.get_alert_next_time_to_run(min_seconds=60, max_seconds=150)
     apiKey = (
         utils.generate_random_string() + "_" + expiryDate.strftime("%d/%m/%Y_%H:%M:%S")
     )

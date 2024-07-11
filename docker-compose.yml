@@ -8,12 +8,12 @@ services:
   #   - 4444:4444
   selenium:
     image: seleniarm/standalone-chromium:102.0.5005.61
-    shm_size: 2g
+    shm_size: 3g
     environment:
       START_XVFB: "false"
-      SE_NODE_MAX_SESSION: 5
+      SE_NODE_MAX_SESSION: 3
       SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
-      SE_NODE_SESSION_TIMEOUT: 150
+      SE_NODE_SESSION_TIMEOUT: 80
     ports:
       - 4444:4444
   database:

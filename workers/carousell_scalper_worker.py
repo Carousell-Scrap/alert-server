@@ -37,7 +37,7 @@ def init_celery():
     celery_init.conf.beat_schedule = {
         "scrape_ready_alerts": {
             "task": "workers.carousell_scalper_worker.scrape_ready_alerts",
-            "schedule": 90.0,
+            "schedule": 60.0,
         }
     }
 
@@ -50,7 +50,8 @@ celery = init_celery()
 
 
 def get_client():
-    return PocketBase(os.getenv("POCKETBASE_URL"))
+    client = PocketBase(os.getenv("POCKETBASE_URL"))
+    return client
 
 
 @celery.task()
@@ -98,6 +99,7 @@ def scrape_carousell_with_params(
 
         print("setting up driver...")
         driver = set_up_driver_option(random.choice(USER_AGENTS))
+        print("driver getting url...")
         driver.get(url)
 
         # ! Remove this as we only need the most recent.
@@ -164,14 +166,15 @@ def scrape_carousell_with_params(
         print(f"Seem to be an error... {error}")
     finally:
         print("quitting driver...")
-        driver.delete_all_cookies()
-        driver.quit()
         get_client().collection("alerts").update(
             alert_id,
             {
                 "status": "ready_to_search",
             },
         )
+        if driver is not None:
+            driver.delete_all_cookies()
+            driver.quit()
 
 
 @celery.task()
@@ -189,10 +192,14 @@ def scrape_ready_alerts():
                 query_params={
                     "filter": f"""status = "ready_to_search" &&
                                         next_time_to_run < "{datetime.today()}" &&
-                                        expire_at > "{datetime.today()}" """
+                                        expire_at > "{datetime.today()}" """,
+                    "sort": "next_time_to_run",  # Sort by next_time_to_run in ascending order
                 }
             )
         )
+
+        # filter alerts_to_scrape to 3 items.
+        alerts_to_scrape = alerts_to_scrape[:3]
 
         for alert in alerts_to_scrape:
             user_id = (
@@ -410,32 +417,45 @@ def create_listing_to_db(
     messages = [""]
     message_index = 0
     print(f"looking through {str(len(items))} items...")
-    for item in items:
-        listing = (
-            get_client()
-            .collection("listings")
-            .get_list(
-                1,
-                1,
-                query_params={
-                    "filter": f'listing_id = "{item["listing_id"]}" && alert_id ="{alert_id}"'
-                },
-            )
+
+    if len(items) == 0:
+        return num_of_items_created, messages
+
+    filter_string = " || ".join(
+        [f'listing_id="{item["listing_id"]}"' for item in items]
+    )
+    filter_string += f' && alert_id="{alert_id}"'
+
+    all_listing = (
+        get_client()
+        .collection("listings")
+        .get_list(
+            1,
+            len(items),
+            query_params={"filter": filter_string},
         )
-        if listing.items is None or len(listing.items) == 0:
-            num_of_items_created += 1
+    )
 
-            if num_of_items_created % 8 == 0:
-                messages.append("")
-                message_index += 1
+    existing_listing_ids = {listing.listing_id for listing in all_listing.items}
+    new_items = [
+        item for item in items if item["listing_id"] not in existing_listing_ids
+    ]
 
-            messages[
-                message_index
-            ] += f'<b>{item["name"]}</b>\nPrice: <b>{CURRENCY_MAP[hostname.split(".")[len(hostname.split(".")) - 1]]}\
+    print("making new items...", len(new_items))
+    for item in new_items:
+        num_of_items_created += 1
+
+        if num_of_items_created % 8 == 0:
+            messages.append("")
+            message_index += 1
+
+        messages[
+            message_index
+        ] += f'<b>{item["name"]}</b>\nPrice: <b>{CURRENCY_MAP[hostname.split(".")[len(hostname.split(".")) - 1]]}\
 {item["price"]}\
-                </b>\nSeller:{item["seller"]}\nVisit Here: {item["detail_url"]}\n\n\n'
+            </b>\nSeller:{item["seller"]}\nVisit Here: {item["detail_url"]}\n\n\n'
 
-            get_client().collection("listings").create(item)
+        get_client().collection("listings").create(item)
 
     return num_of_items_created, messages
 
@@ -449,7 +469,7 @@ def set_up_driver_option(user_agent: str):
     Returns:
         WebDriver: Driver to be used to scrape.
     """
-
+    print("set_up_driver_option")
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")

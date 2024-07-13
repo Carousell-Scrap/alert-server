@@ -13,7 +13,7 @@ services:
       START_XVFB: "false"
       SE_NODE_MAX_SESSION: 3
       SE_NODE_OVERRIDE_MAX_SESSIONS: "true"
-      SE_NODE_SESSION_TIMEOUT: 80
+      SE_NODE_SESSION_TIMEOUT: 300
     ports:
       - 4444:4444
   database:
@@ -57,7 +57,7 @@ services:
       context: .
     hostname: carousell_scalper_worker
     entrypoint: celery
-    command: -A workers.carousell_scalper_worker worker --loglevel=info --concurrency=4 -E
+    command: -A workers.carousell_scalper_worker worker --loglevel=info --concurrency=3 -E
     volumes:
       - .:/app
     links:
